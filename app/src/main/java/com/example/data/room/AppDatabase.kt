@@ -14,11 +14,14 @@ import androidx.room.RoomDatabase
         KrgEmbeddingModelEntity::class,
         KrgSymbolicTransformEntity::class
     ],
-    version = 3,
+    version = 5,
     exportSchema = false
 )
+@androidx.room.TypeConverters(KrgTypeConverters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun krgDao(): KrgDao
+    abstract fun krgEmbeddingModelDao(): KrgEmbeddingModelDao
+    abstract fun krgSymbolicTransformDao(): KrgSymbolicTransformDao
 
     companion object {
         @Volatile

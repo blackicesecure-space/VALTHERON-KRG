@@ -50,3 +50,36 @@ interface KrgDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSymbolicTransform(transform: KrgSymbolicTransformEntity)
 }
+
+@Dao
+interface KrgEmbeddingModelDao {
+    @Query("SELECT * FROM krg_embedding_models ORDER BY createdAt DESC")
+    fun getAllModels(): Flow<List<KrgEmbeddingModelEntity>>
+
+    @Query("SELECT * FROM krg_embedding_models WHERE modelId = :modelId AND modelVersion = :modelVersion LIMIT 1")
+    suspend fun getModelByRef(modelId: String, modelVersion: String): KrgEmbeddingModelEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertModel(model: KrgEmbeddingModelEntity)
+
+    @Query("SELECT COUNT(*) FROM krg_embeddings WHERE workspaceId = :workspaceId AND sourceType = :sourceType AND sourceId = :sourceId AND contentHash = :contentHash AND modelRef = :modelRef")
+    suspend fun verifyEmbeddingIdentity(
+        workspaceId: String,
+        sourceType: String,
+        sourceId: String,
+        contentHash: String,
+        modelRef: String
+    ): Int
+}
+
+@Dao
+interface KrgSymbolicTransformDao {
+    @Query("SELECT * FROM krg_symbolic_transforms ORDER BY createdAt DESC")
+    fun getAllTransforms(): Flow<List<KrgSymbolicTransformEntity>>
+
+    @Query("SELECT * FROM krg_symbolic_transforms WHERE transformId = :transformId AND version = :version LIMIT 1")
+    suspend fun getTransformByRef(transformId: String, version: String): KrgSymbolicTransformEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTransform(transform: KrgSymbolicTransformEntity)
+}

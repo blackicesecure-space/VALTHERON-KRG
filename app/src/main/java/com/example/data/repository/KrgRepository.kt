@@ -1,5 +1,7 @@
 package com.example.data.repository
 
+import com.example.data.embedding.EmbeddingModel
+import com.example.data.embedding.GeminiEmbeddingModel
 import com.example.data.network.generateSemanticResonanceAnalysis
 import com.example.data.room.KrgAuditLogEntity
 import com.example.data.room.KrgCalculationEntity
@@ -9,9 +11,11 @@ import com.example.data.room.KrgWorkspaceItemEntity
 import com.example.data.service.GematriaResult
 import kotlinx.coroutines.flow.Flow
 import java.security.MessageDigest
-import kotlin.random.Random
 
-class KrgRepository(private val krgDao: KrgDao) {
+class KrgRepository(
+    private val krgDao: KrgDao,
+    private val embeddingModel: EmbeddingModel = GeminiEmbeddingModel()
+) {
 
     val allWorkspaceItems: Flow<List<KrgWorkspaceItemEntity>> = krgDao.getAllWorkspaceItems()
     val allEmbeddings: Flow<List<KrgEmbeddingEntity>> = krgDao.getAllEmbeddings()
@@ -28,19 +32,37 @@ class KrgRepository(private val krgDao: KrgDao) {
         krgDao.insertWorkspaceItem(item)
 
         val contentHash = sha256(content)
-        val vectorSummary = generateMockVector()
+        val vectorFloatArray = try {
+            embeddingModel.embed(content)
+        } catch (e: Exception) {
+            // Fallback or rethrow honestly
+            throw RuntimeException("Failed to generate real embedding via ${embeddingModel.modelId}: ${e.message}", e)
+        }
+
+        if (vectorFloatArray.size != embeddingModel.dimensions) {
+            // Log warning or adjust dimension dynamically based on provider response
+        }
+
+        val vectorSummary = "[${vectorFloatArray.take(4).joinToString(", ") { "%.3f".format(it) }}... (${vectorFloatArray.size}d)]"
+        val modelRef = "${embeddingModel.modelId}:${embeddingModel.modelVersion}"
+
         val embedding = KrgEmbeddingEntity(
             embeddingVectorSummary = vectorSummary,
             sourceType = sourceType,
             sourceId = item.id,
             contentHash = contentHash,
-            metadataJson = "{\"title\":\"$title\", \"length\":${content.length}}"
+            modelRef = modelRef,
+            dimensions = vectorFloatArray.size,
+            distanceMetric = embeddingModel.distanceMetric.name.lowercase(),
+            normalization = embeddingModel.normalization,
+            embedding = vectorFloatArray,
+            metadataJson = "{\"title\":\"$title\", \"length\":${content.length}, \"provider\":\"Gemini API\"}"
         )
         krgDao.insertEmbedding(embedding)
 
         val audit = KrgAuditLogEntity(
             action = "EMBEDDING_GENERATED",
-            details = "Ingested $sourceType '${title}' with hash $contentHash and vector [1536d]"
+            details = "Embedding generated using model ${embeddingModel.modelId} version ${embeddingModel.modelVersion} (${vectorFloatArray.size}d) for '${title}' with hash $contentHash"
         )
         krgDao.insertAuditLog(audit)
     }
@@ -80,7 +102,7 @@ class KrgRepository(private val krgDao: KrgDao) {
         krgDao.insertAuditLog(
             KrgAuditLogEntity(
                 action = "CONTEXTUAL_SEARCH",
-                details = "Executed pgvector ANN search for query: '$query'"
+                details = "Executed semantic similarity search against local embedding cache for query: '$query'"
             )
         )
         return generateSemanticResonanceAnalysis("Analyze contextual resonance for query: '$query'")
@@ -89,17 +111,5 @@ class KrgRepository(private val krgDao: KrgDao) {
     private fun sha256(input: String): String {
         val bytes = MessageDigest.getInstance("SHA-256").digest(input.toByteArray())
         return bytes.joinToString("") { "%02x".format(it) }
-    }
-
-    private fun generateMockVector(): String {
-        val dims = 4
-        val sb = StringBuilder("[")
-        for (i in 0 until dims) {
-            val v = Random.nextDouble(-1.0, 1.0)
-            sb.append(String.format("%.3f", v))
-            if (i < dims - 1) sb.append(", ")
-        }
-        sb.append("... (1536d)]")
-        return sb.toString()
     }
 }

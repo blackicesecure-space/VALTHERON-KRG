@@ -16,17 +16,31 @@ data class KrgWorkspaceItemEntity(
     val createdAt: Long = System.currentTimeMillis()
 )
 
-@Entity(tableName = "krg_embeddings")
+@Entity(
+    tableName = "krg_embeddings",
+    indices = [
+        androidx.room.Index(
+            value = ["workspaceId", "sourceType", "sourceId", "contentHash", "modelRef"],
+            unique = true
+        )
+    ]
+)
 data class KrgEmbeddingEntity(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val embeddingVectorSummary: String,
     val sourceType: String,
     val sourceId: String,
     val contentHash: String,
+    val modelRef: String = "text-embedding-004:v1",
+    val dimensions: Int = 768,
+    val distanceMetric: String = "cosine",
+    val normalization: String? = "L2",
+    val embedding: FloatArray,
     val workspaceId: String = "ws-valtheron-alpha",
     val userId: String = "valtheron-agent-01",
     val metadataJson: String = "{}",
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
 )
 
 @Entity(tableName = "krg_audit_logs")
