@@ -74,6 +74,11 @@ dependencies {
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.logging.interceptor)
   implementation(libs.okhttp)
+  testImplementation(libs.junit)
+  testImplementation(libs.androidx.junit)
+  testImplementation(libs.kotlinx.coroutines.core)
+  testImplementation(libs.kotlinx.coroutines.test)
+  testImplementation(libs.robolectric)
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
 }

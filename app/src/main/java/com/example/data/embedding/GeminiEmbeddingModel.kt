@@ -12,7 +12,7 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 class GeminiEmbeddingModel(
-    override val modelId: String = "text-embedding-004",
+    override val modelId: String = "gemini-embedding-2",
     override val modelVersion: String = "v1",
     override val dimensions: Int = 768,
     override val distanceMetric: DistanceMetric = DistanceMetric.COSINE,
@@ -24,17 +24,26 @@ class GeminiEmbeddingModel(
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
+    // Primary: gemini-embedding-2, Fallback: gemini-embedding-001
+    private val candidateModels = listOf(
+        Pair("gemini-embedding-2", 768),
+        Pair("gemini-embedding-001", 768)
+    )
+
+    var activeModelId: String = modelId
+        private set
+    var activeDimensions: Int = dimensions
+        private set
+
     override suspend fun embed(text: String): FloatArray = withContext(Dispatchers.IO) {
         val apiKey = BuildConfig.GEMINI_API_KEY
         if (apiKey.isBlank()) {
             throw IllegalStateException("Gemini API Key is missing. Please configure it in AI Studio Secrets.")
         }
 
-        // Try text-embedding-004 first, with fallback to gemini-2.5-flash / gemini-1.5-flash if deprecated
-        val modelsToTry = listOf("text-embedding-004", "gemini-2.5-flash", "gemini-1.5-flash")
         var lastException: Exception? = null
 
-        for (mId in modelsToTry) {
+        for ((mId, expectedDims) in candidateModels) {
             try {
                 val url = "https://generativelanguage.googleapis.com/v1beta/models/$mId:embedContent?key=$apiKey"
                 
@@ -64,7 +73,18 @@ class GeminiEmbeddingModel(
                         for (i in 0 until valuesArray.length()) {
                             result[i] = valuesArray.getDouble(i).toFloat()
                         }
-                        if (result.isNotEmpty()) return@withContext result
+
+                        // Fail hard if returned vector size != expected dimensions
+                        if (result.size != expectedDims) {
+                            throw RuntimeException("Dimension mismatch for model $mId: expected $expectedDims, got ${result.size}")
+                        }
+
+                        activeModelId = mId
+                        activeDimensions = expectedDims
+                        return@withContext result
+                    } else {
+                        val errorBody = response.body?.string() ?: "Unknown error"
+                        lastException = RuntimeException("Model $mId failed (${response.code}): $errorBody")
                     }
                 }
             } catch (e: Exception) {
@@ -72,6 +92,6 @@ class GeminiEmbeddingModel(
             }
         }
         
-        throw RuntimeException("All embedding models failed. Last error: ${lastException?.message}", lastException)
+        throw RuntimeException("All dedicated embedding models (gemini-embedding-2, gemini-embedding-001) failed. Last error: ${lastException?.message}", lastException)
     }
 }

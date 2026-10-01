@@ -35,16 +35,18 @@ class KrgRepository(
         val vectorFloatArray = try {
             embeddingModel.embed(content)
         } catch (e: Exception) {
-            // Fallback or rethrow honestly
             throw RuntimeException("Failed to generate real embedding via ${embeddingModel.modelId}: ${e.message}", e)
         }
 
-        if (vectorFloatArray.size != embeddingModel.dimensions) {
-            // Log warning or adjust dimension dynamically based on provider response
+        val actualModelId = if (embeddingModel is GeminiEmbeddingModel) embeddingModel.activeModelId else embeddingModel.modelId
+        val actualDimensions = if (embeddingModel is GeminiEmbeddingModel) embeddingModel.activeDimensions else embeddingModel.dimensions
+
+        if (vectorFloatArray.size != actualDimensions) {
+            throw RuntimeException("Strict dimension validation failed: expected $actualDimensions, got ${vectorFloatArray.size}")
         }
 
         val vectorSummary = "[${vectorFloatArray.take(4).joinToString(", ") { "%.3f".format(it) }}... (${vectorFloatArray.size}d)]"
-        val modelRef = "${embeddingModel.modelId}:${embeddingModel.modelVersion}"
+        val modelRef = "$actualModelId:${embeddingModel.modelVersion}"
 
         val embedding = KrgEmbeddingEntity(
             embeddingVectorSummary = vectorSummary,
@@ -56,13 +58,13 @@ class KrgRepository(
             distanceMetric = embeddingModel.distanceMetric.name.lowercase(),
             normalization = embeddingModel.normalization,
             embedding = vectorFloatArray,
-            metadataJson = "{\"title\":\"$title\", \"length\":${content.length}, \"provider\":\"Gemini API\"}"
+            metadataJson = "{\"title\":\"$title\", \"length\":${content.length}, \"provider\":\"Gemini API\", \"modelUsed\":\"$actualModelId\"}"
         )
         krgDao.insertEmbedding(embedding)
 
         val audit = KrgAuditLogEntity(
             action = "EMBEDDING_GENERATED",
-            details = "Embedding generated using model ${embeddingModel.modelId} version ${embeddingModel.modelVersion} (${vectorFloatArray.size}d) for '${title}' with hash $contentHash"
+            details = "Embedding generated using model $actualModelId version ${embeddingModel.modelVersion} (${vectorFloatArray.size}d) for '${title}' with hash $contentHash"
         )
         krgDao.insertAuditLog(audit)
     }
