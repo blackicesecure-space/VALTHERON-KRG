@@ -1,0 +1,6 @@
+{
+  "name": "Valtheron KRG",
+  "description": "Kontextuelle Resonanz-Gematria (KRG) Semantic Indexing & Workspace Engine",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
